@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 可选：把 content 改为完整后端地址，例如 http://your-server:5001 -->
+    <meta name="api-base" content="" />
+    <title>小说人物关系星云 · 文本分析与剧情阶段</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E%E2%9C%A8%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="assets/app.css?v=20260815-4" />
+    <script>
+        // 先标记直接双击模式，避免应用界面短暂闪现。
+        if (window.location.protocol === 'file:') {
+            document.documentElement.classList.add('file-launch-mode');
+        }
+    </script>
+</head>
+<body>
+    <main class="file-launcher" aria-live="polite">
+        <section class="file-launch-card">
+            <div class="file-launch-icon">✨</div>
+            <h1>关系网需要通过启动程序打开</h1>
+            <p id="file-launch-status">请先启动本地服务，再打开关系网。</p>
+            <ol>
+                <li>回到 <strong>关系网-release</strong> 文件夹</li>
+                <li>双击 <strong>start.bat</strong></li>
+                <li>等待浏览器自动打开关系网</li>
+            </ol>
+            <a href="http://127.0.0.1:8080/">启动完成后，打开关系网</a>
+            <small>不要直接双击 index.html；浏览器会阻止本地模块加载。</small>
+        </section>
+    </main>
+
+    <!-- 背景音乐 (本地音乐文件，见 JS 底部) -->
+
+    <div id="info">✨ 导入小说文本后生成人物关系图</div>
+    <div id="loading">📖 请先导入小说文本并开始分析</div>
+    <div id="tooltip"></div>
+    <div id="relation-tooltip"></div>
+
+    <!-- 上传面板 -->
+    <div id="upload-panel">
+        <button class="panel-minimize-btn" id="hideUploadBtn" type="button" title="向左收起导入面板" aria-label="向左收起导入面板"><span class="chevron-left" aria-hidden="true"></span></button>
+        <div class="up-title">📄 导入小说文本</div>
+        <div class="up-dropzone" id="dropzone">
+            拖拽 .txt / .md 文件到此处<br/>或点击选择文件
+        </div>
+        <input type="file" id="file-input" accept=".txt,.md,text/plain,text/markdown" style="display:none" />
+        <div class="up-filename" id="filename"></div>
+        <div class="up-divider"><span>或者直接粘贴文本</span></div>
+        <textarea id="text-input" class="up-text-input" placeholder="在这里粘贴一段文本或小说内容……"></textarea>
+        <button class="up-btn" id="analyze-btn" disabled>开始分析人物关系</button>
+        <div class="up-actions">
+            <button class="up-reset" id="restore-last-btn" disabled>恢复上次分析</button>
+            <button class="up-reset" id="export-btn" disabled>导出结果</button>
+        </div>
+        <div class="up-progress" id="progress">
+            <div class="up-progress-bar"><div class="up-progress-fill" id="progress-fill" style="width:0%"></div></div>
+            <div class="up-progress-text" id="progress-text">等待中...</div>
+        </div>
+        <div class="up-error" id="upload-error"></div>
+    </div>
+
+    <!-- 收起上传面板后显示 -->
+    <button class="upload-panel-toggle" id="showUploadBtn" type="button" title="展开导入面板">📄 导入</button>
+
+    <!-- 聚焦信息栏 -->
+    <div id="focus-bar">
+        <span id="focus-icon">🎯</span>
+        <span id="focus-name"></span>
+        <button id="focus-exit" title="退出聚焦（或双击同一节点 / 按 ESC）">✕ 退出聚焦</button>
+    </div>
+
+    <!-- 控制面板 -->
+    <div id="controls">
+        <button class="panel-minimize-btn" id="closeControls" type="button" title="收起控制面板" aria-label="收起控制面板"><span class="chevron-down" aria-hidden="true"></span></button>
+
+        <!-- ★★★ 搜索框 ★★★ -->
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="🔍 搜索人物..." autocomplete="off" />
+            <button class="clear-btn" id="search-clear">✕</button>
+            <div class="search-dropdown" id="search-dropdown"></div>
+        </div>
+
+        <div class="ctrl-label"><span>粒子大小</span><span id="particle-val">0.9</span></div>
+        <label><input type="range" id="particle-size" min="0.2" max="2.0" step="0.1" value="0.9" /></label>
+
+        <div class="ctrl-label"><span>线条亮度</span><span id="brightness-val">0.5</span></div>
+        <label><input type="range" id="line-brightness" min="0.1" max="1.0" step="0.05" value="0.5" /></label>
+
+        <div class="ctrl-label"><span>面板透明度</span><span id="opacity-val">0.7</span></div>
+        <label><input type="range" id="panel-opacity" min="0.1" max="1.0" step="0.05" value="0.7" /></label>
+
+        <button id="toggle-rotate">⏸ 停止旋转</button>
+        <button id="toggle-music">🔇 关闭音乐</button>
+        <button id="toggle-labels" title="切换全部人物名字或仅显示核心人物名字">👤 全部名字</button>
+
+        <div class="era-buttons">
+            <button class="active" data-era="all">📖 全文</button>
+        </div>
+    </div>
+
+    <!-- 显示面板的悬浮按钮（隐藏面板后出现） -->
+    <button class="panel-toggle" id="showControlsBtn" title="显示控制面板">⚙</button>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://esm.sh/three@0.150.0",
+                "three/addons/": "https://esm.sh/three@0.150.0/examples/jsm/",
+                "d3-force-3d": "https://esm.sh/d3-force-3d@3.0.2"
+            }
+        }
+    </script>
+
+    <script>
+        // ES Module 不能直接从 file:// 加载。直接双击时只显示启动指引，
+        // 避免服务未启动时产生无意义的网络错误。
+        if (window.location.protocol === 'file:') {
+            // 用户启动 start.bat 后，可点击引导页按钮进入 http://127.0.0.1:8080/。
+        } else {
+            var appScript = document.createElement('script');
+            appScript.type = 'module';
+            // 更新版本号可强制浏览器获取最新模块，避免本地开发时继续使用旧缓存。
+            appScript.src = 'assets/app.js?v=20260815-8';
+            document.body.appendChild(appScript);
+        }
+    </script>
+</body>
+</html>
